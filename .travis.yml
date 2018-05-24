@@ -31,6 +31,9 @@ matrix:
 
 script:
   - bash -xe build.sh
+  - nix-shell --pure --run "cabal configure --enable-tests"
+  - nix-shell --pure --run "cabal build"
+  - nix-shell --pure --run "env ALL_TESTS=yes cabal test"
 
 branches:
   only:
