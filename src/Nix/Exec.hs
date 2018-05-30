@@ -552,7 +552,17 @@ instance (MonadFix m, MonadCatch m, MonadIO m,
 
 --  getURL = capture . nixInstantiateExpr
 
---  getRecursiveSize = capture . getRecursiveSize
+  getRecursiveSize =
+#ifdef MIN_VERSION_ghc_datasize
+#if MIN_VERSION_ghc_datasize(0,2,0) && __GLASGOW_HASKELL__ >= 804
+        toNix @Integer <=< fmap fromIntegral . liftIO . recursiveSize
+#else
+        const $ toNix (0 :: Integer)
+#endif
+#else
+        const $ toNix (0 :: Integer)
+#endif
+
 
   traceEffect = capture . traceEffect
 
