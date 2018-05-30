@@ -33,6 +33,8 @@ import           Control.Monad.Fix
 import           Control.Monad.IO.Class
 import           Control.Monad.Reader
 import           Control.Monad.State.Strict
+import           Control.Monad.Writer
+import           Control.Monad.Trans.Writer (WriterT(..))
 import           Control.Monad.Trans.Reader (ReaderT(..))
 import           Control.Monad.Trans.State.Strict (StateT(..))
 import qualified Data.ByteString as BS
@@ -40,6 +42,8 @@ import           Data.Coerce
 import           Data.Fix
 import           Data.HashMap.Lazy (HashMap)
 import qualified Data.HashMap.Lazy as M
+import           Data.HashSet (HashSet)
+import qualified Data.HashSet as S
 import           Data.IORef
 import           Data.List
 import qualified Data.List.NonEmpty as NE
@@ -462,6 +466,11 @@ coerceToString copyToStore = go
 
         v -> throwError $ ErrorCall $ "Expected a string, but saw: " ++ show v
 
+newtype Capture m a = Capture { runCapture :: WriterT (HashSet FilePath) (Lazy m) a }
+   deriving (Functor, Applicative, Alternative, Monad, MonadPlus,
+             MonadFix, MonadIO,
+             MonadWriter (HashSet FilePath))
+
 newtype Lazy m a = Lazy
     { runLazy :: ReaderT (Context (Lazy m) (NThunk (Lazy m)))
                         (StateT (HashMap FilePath NExprLoc) m) a }
@@ -493,6 +502,61 @@ instance MonadException m => MonadException (Lazy m) where
       let run' = RunIO (fmap Lazy . run . runLazy)
       in runLazy <$> f run'
 #endif
+
+captures :: Monad m => FilePath -> Lazy m a -> Capture m a
+captures path = (<* tell (S.singleton path)) . capture
+
+capture :: Monad m => Lazy m a -> Capture m a
+capture = Capture . WriterT . fmap (, mempty)
+
+{-
+also capture returns?
+- makeAbsolutePath
+- findEnvPath
+- findPath
+- listDirectory
+
+how to handle?
+- [NThunk m]
+- m (NValue m)
+-}
+instance (MonadFix m, MonadCatch m, MonadIO m,
+          MonadPlus m, Typeable m) => MonadEffects (Capture m) where
+  addPath = captures <*> addPath
+
+  toFile_ path content = capture $ toFile_ path content -- temporary file?
+
+  makeAbsolutePath = captures <*> makeAbsolutePath
+
+  findEnvPath = capture . findEnvPath
+
+--  findPath
+
+  pathExists = captures <*> pathExists
+
+--  importPath
+
+  getEnvVar = capture . getEnvVar
+
+  getCurrentSystemOS = capture getCurrentSystemOS
+
+  getCurrentSystemArch = capture getCurrentSystemArch
+
+  listDirectory = captures <*> Nix.Effects.listDirectory
+
+  getSymbolicLinkStatus = captures <*> Nix.Effects.getSymbolicLinkStatus
+
+--  derivationStrict = capture . derivationStrict
+
+--  nixInstantiateExpr = capture . nixInstantiateExpr
+
+--  getURL = capture . nixInstantiateExpr
+
+--  getRecursiveSize = capture . getRecursiveSize
+
+  traceEffect = capture . traceEffect
+
+--  exec = capture . exec
 
 instance (MonadFix m, MonadCatch m, MonadIO m, Alternative m,
           MonadPlus m, Typeable m)
@@ -677,6 +741,11 @@ runLazyM :: Options -> MonadIO m => Lazy m a -> m a
 runLazyM opts = (`evalStateT` M.empty)
               . (`runReaderT` newContext opts)
               . runLazy
+
+runCaptureM :: Options -> MonadIO m => Capture m a -> m a
+runCaptureM opts = runLazyM opts
+                 . (fmap fst . runWriterT)
+                 . runCapture
 
 -- | Incorrectly normalize paths by rewriting patterns like @a/b/..@ to @a@.
 --   This is incorrect on POSIX systems, because if @b@ is a symlink, its
