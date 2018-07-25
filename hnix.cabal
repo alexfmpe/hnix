@@ -2,10 +2,10 @@
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 1b17b8508cf3604a1b3d02ee09fb3b6dad0217654b7f516c2f4694f0774bb987
+-- hash: ba0f61f8a049f6970ff03fd924cfed6fc1251eceb90547c1be8051226c453632
 
 name:           hnix
-version:        0.5.1
+version:        0.5.2
 synopsis:       Haskell implementation of the Nix language
 description:    Haskell implementation of the Nix language.
 category:       System, Data, Nix
@@ -494,7 +494,7 @@ library
     , containers
     , data-fix
     , deepseq >=1.4.2 && <1.5
-    , deriving-compat >=0.3 && <0.5
+    , deriving-compat >=0.3 && <0.6
     , directory
     , exceptions
     , filepath
@@ -505,7 +505,7 @@ library
     , interpolate
     , lens-family-th
     , logict
-    , megaparsec >=6.0 && <6.6
+    , megaparsec >=6.5 && <7.0
     , monadlist
     , mtl
     , optparse-applicative
@@ -683,6 +683,7 @@ test-suite hnix-tests
   else
     buildable: True
   default-language: Haskell2010
+  build-tool-depends: hspec-discover:hspec-discover == 2.*
 
 benchmark hnix-benchmarks
   type: exitcode-stdio-1.0
